@@ -2,6 +2,7 @@
 
 ### Retailers (`retailers`)
 - `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `code` TEXT UNIQUE NOT NULL
 - `name` TEXT UNIQUE NOT NULL
 - `requires_pin` BOOLEAN NOT NULL DEFAULT 0
 - `notes` TEXT NULL
@@ -76,6 +77,7 @@
 - `inventory_item_id` INTEGER NOT NULL REFERENCES `inventory_items`(`id`) ON DELETE CASCADE
 - `source_type` TEXT NOT NULL CHECK (`source_type` IN ('order', 'sale', 'adjustment'))
 - `source_id` INTEGER NULL
+- `order_item_id` INTEGER NULL REFERENCES `order_items`(`id`) ON DELETE SET NULL
 - `quantity_change` INTEGER NOT NULL
 - `cost_change` NUMERIC(10, 2) NOT NULL
 - `movement_date` DATETIME NOT NULL
@@ -128,7 +130,3 @@
 - `label` TEXT NULL
 - `created_at` DATETIME NOT NULL
 - `updated_at` DATETIME NOT NULL
-
----
-
-> **Note:** Date/time columns should use UTC timestamps. Application services will enforce SKU formatting, balance invariants, and automatic aggregate updates (e.g., inventory movement summaries, gift card remaining balances, account balances).
