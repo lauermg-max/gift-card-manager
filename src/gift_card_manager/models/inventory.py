@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -46,11 +46,11 @@ class InventoryMovement(Base):
     inventory_item_id: Mapped[int] = mapped_column(
         ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False
     )
-    source_type: Mapped[InventorySourceType] = mapped_column(
-        Enum(InventorySourceType), nullable=False
-    )
+    source_type: Mapped[InventorySourceType] = mapped_column(Enum(InventorySourceType), nullable=False)
     source_id: Mapped[int | None]
-    order_item_id: Mapped[int | None] = mapped_column(ForeignKey("order_items.id", ondelete="SET NULL"))
+    order_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("order_items.id", ondelete="SET NULL")
+    )
     quantity_change: Mapped[int] = mapped_column(Integer, nullable=False)
     cost_change: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     movement_date: Mapped[datetime] = mapped_column(
@@ -58,5 +58,5 @@ class InventoryMovement(Base):
     )
     notes: Mapped[str | None] = mapped_column(String(500))
 
-    inventory_item: Mapped[InventoryItem] = relationship("InventoryItem", back_populates="movements")
-    order_item: Mapped["OrderItem" | None] = relationship("OrderItem", back_populates="inventory_links")
+    inventory_item: Mapped["InventoryItem"] = relationship("InventoryItem", back_populates="movements")
+    order_item: Mapped[Optional["OrderItem"]] = relationship("OrderItem", back_populates="inventory_links")
