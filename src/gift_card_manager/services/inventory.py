@@ -100,4 +100,5 @@ class InventoryService:
         else:
             item.average_cost = Decimal("0")
 
-        item.notes = item.notes  # trigger dirty flag
+        # touch a field to mark dirty
+        item.notes = item.notes

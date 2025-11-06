@@ -24,12 +24,8 @@ from PySide6.QtWidgets import (
 
 from ...core import session_scope
 from ...models import InventoryItem
-from ...models.enums import InventorySourceType
 from ...services import InventoryAdjustment, InventoryService
-from .dialogs import (
-    InventoryAdjustmentDialog,
-    InventoryItemDialog,
-)
+from .dialogs import InventoryAdjustmentDialog, InventoryItemDialog
 from .model import InventoryTableModel
 
 logger = logging.getLogger(__name__)
@@ -154,3 +150,159 @@ class InventoryView(QWidget):
             menu.addSeparator()
             menu.addAction("Adjust Stock", self._adjust_selected)
         menu.exec(self._table.viewport().mapToGlobal(position))
+
+    # ------------------------------------------------------------ Actions ---
+    def _add_item(self) -> None:
+        dialog = InventoryItemDialog(parent=self)
+        if dialog.exec() != InventoryItemDialog.Accepted:
+            return
+
+        result = dialog.result_data()
+        if result is None:
+            return
+
+        item = InventoryItem(
+            item_name=result.item_name,
+            sku=result.sku,
+            upc=result.upc,
+            quantity_on_hand=result.quantity_on_hand,
+            average_cost=result.average_cost,
+            total_cost=result.total_cost,
+        )
+
+        with session_scope() as session:
+            service = InventoryService(session)
+            try:
+                initial_adjustment = None
+                if result.quantity_on_hand or result.total_cost:
+                    cost_change = result.total_cost
+                    initial_adjustment = InventoryAdjustment(
+                        quantity_change=result.quantity_on_hand,
+                        cost_change=cost_change,
+                        source_type=InventorySourceType.ADJUSTMENT,
+                        notes="Initial stock",
+                    )
+                service.create_item(item, initial_adjustment=initial_adjustment)
+                session.commit()
+            except Exception as exc:  # pragma: no cover - UI feedback
+                session.rollback()
+                logger.exception("Failed to create inventory item")
+                QMessageBox.critical(self, "Add Item", f"Failed to create item:\n{exc}")
+                return
+
+        self.refresh()
+
+    def _edit_selected(self) -> None:
+        selection = self._current_selection()
+        item = selection.ensure_single()
+        if item is None:
+            QMessageBox.information(self, "Edit Item", "Select one inventory item to edit.")
+            return
+
+        dialog = InventoryItemDialog(parent=self, existing=item)
+        if dialog.exec() != InventoryItemDialog.Accepted:
+            return
+
+        result = dialog.result_data()
+        if result is None:
+            return
+
+        with session_scope() as session:
+            db_item = session.get(InventoryItem, item.id)
+            if db_item is None:
+                QMessageBox.warning(self, "Edit Item", "Selected item no longer exists.")
+                return
+
+            db_item.item_name = result.item_name
+            db_item.sku = result.sku
+            db_item.upc = result.upc
+            db_item.quantity_on_hand = result.quantity_on_hand
+            db_item.average_cost = result.average_cost
+            db_item.total_cost = result.total_cost
+
+            service = InventoryService(session)
+
+            try:
+                service.update_item(db_item)
+                session.commit()
+            except Exception as exc:  # pragma: no cover - UI feedback
+                session.rollback()
+                logger.exception("Failed to update inventory item")
+                QMessageBox.critical(self, "Edit Item", f"Failed to update item:\n{exc}")
+                return
+
+        self.refresh()
+
+    def _delete_selected(self) -> None:
+        selection = self._current_selection()
+        if selection.count == 0:
+            QMessageBox.information(self, "Delete Items", "No items selected.")
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Delete Items",
+            f"Delete {selection.count} selected item(s)? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        with session_scope() as session:
+            service = InventoryService(session)
+            for item in selection.rows:
+                db_item = session.get(InventoryItem, item.id)
+                if db_item:
+                    service.delete_item(db_item)
+            try:
+                session.commit()
+            except Exception as exc:  # pragma: no cover - UI feedback
+                session.rollback()
+                logger.exception("Failed to delete inventory items")
+                QMessageBox.critical(self, "Delete Items", f"Failed to delete items:\n{exc}")
+                return
+
+        self.refresh()
+
+    def _adjust_selected(self) -> None:
+        selection = self._current_selection()
+        item = selection.ensure_single()
+        if item is None:
+            QMessageBox.information(self, "Adjust Stock", "Select one item to adjust.")
+            return
+
+        dialog = InventoryAdjustmentDialog(parent=self)
+        if dialog.exec() != InventoryAdjustmentDialog.Accepted:
+            return
+
+        result = dialog.result_data()
+        if result is None:
+            return
+
+        with session_scope() as session:
+            db_item = session.get(InventoryItem, item.id)
+            if db_item is None:
+                QMessageBox.warning(self, "Adjust Stock", "Selected item no longer exists.")
+                return
+
+            service = InventoryService(session)
+
+            try:
+                service.apply_adjustment(db_item, result.adjustment)
+                session.commit()
+            except Exception as exc:  # pragma: no cover - UI feedback
+                session.rollback()
+                logger.exception("Failed to apply inventory adjustment")
+                QMessageBox.critical(self, "Adjust Stock", f"Failed to apply adjustment:\n{exc}")
+                return
+
+        self.refresh()
+
+    # --------------------------------------------------------- Helpers ------
+    def _current_selection(self) -> InventorySelection:
+        selection_model = self._table.selectionModel()
+        selected_rows = selection_model.selectedRows()
+        rows: List[InventoryItem] = []
+        for index in selected_rows:
+            rows.append(self._model.row_at(index.row()))
+        return InventorySelection(rows)
