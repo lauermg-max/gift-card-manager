@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from ...core import session_scope
 from ...models import InventoryItem
+from ...models.enums import InventorySourceType
 from ...services import InventoryAdjustment, InventoryService
 from .dialogs import InventoryAdjustmentDialog, InventoryItemDialog
 from .model import InventoryTableModel
@@ -165,9 +166,9 @@ class InventoryView(QWidget):
             item_name=result.item_name,
             sku=result.sku,
             upc=result.upc,
-            quantity_on_hand=result.quantity_on_hand,
-            average_cost=result.average_cost,
-            total_cost=result.total_cost,
+            quantity_on_hand=0,
+            average_cost=Decimal("0"),
+            total_cost=Decimal("0"),
         )
 
         with session_scope() as session:
@@ -175,10 +176,9 @@ class InventoryView(QWidget):
             try:
                 initial_adjustment = None
                 if result.quantity_on_hand or result.total_cost:
-                    cost_change = result.total_cost
                     initial_adjustment = InventoryAdjustment(
                         quantity_change=result.quantity_on_hand,
-                        cost_change=cost_change,
+                        cost_change=result.total_cost,
                         source_type=InventorySourceType.ADJUSTMENT,
                         notes="Initial stock",
                     )
