@@ -9,7 +9,6 @@ from typing import Iterable, List
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -23,10 +22,11 @@ from PySide6.QtWidgets import (
 )
 
 from ...core import session_scope
-from ...models import InventoryItem
+from ...models import InventoryItem, InventoryMovement
 from ...models.enums import InventorySourceType
 from ...services import InventoryAdjustment, InventoryService
 from .dialogs import InventoryAdjustmentDialog, InventoryItemDialog
+from .history import InventoryMovementDialog
 from .model import InventoryTableModel
 
 logger = logging.getLogger(__name__)
@@ -93,6 +93,9 @@ class InventoryView(QWidget):
 
         toolbar.addSeparator()
 
+        history_action = toolbar.addAction("View Movements")
+        history_action.triggered.connect(self._view_movements)
+
         adjust_action = toolbar.addAction("Adjust Stock")
         adjust_action.triggered.connect(self._adjust_selected)
 
@@ -150,6 +153,7 @@ class InventoryView(QWidget):
             menu.addAction("Delete Item", self._delete_selected)
             menu.addSeparator()
             menu.addAction("Adjust Stock", self._adjust_selected)
+            menu.addAction("View Movements", self._view_movements)
         menu.exec(self._table.viewport().mapToGlobal(position))
 
     # ------------------------------------------------------------ Actions ---
@@ -297,6 +301,24 @@ class InventoryView(QWidget):
                 return
 
         self.refresh()
+
+    def _view_movements(self) -> None:
+        selection = self._current_selection()
+        item = selection.ensure_single()
+        if item is None:
+            QMessageBox.information(self, "View Movements", "Select one item to view movements.")
+            return
+
+        with session_scope() as session:
+            movements = (
+                session.query(InventoryMovement)
+                .filter(InventoryMovement.inventory_item_id == item.id)
+                .order_by(InventoryMovement.movement_date.desc())
+                .all()
+            )
+
+        dialog = InventoryMovementDialog(item_name=item.item_name, movements=movements, parent=self)
+        dialog.exec()
 
     # --------------------------------------------------------- Helpers ------
     def _current_selection(self) -> InventorySelection:

@@ -6,6 +6,7 @@ from .dialogs import (
     InventoryItemDialog,
     InventoryItemDialogResult,
 )
+from .history import InventoryMovementDialog
 from .model import InventoryTableModel
 from .tab import InventoryTab
 from .view import InventoryView
@@ -15,6 +16,7 @@ __all__ = [
     "InventoryAdjustmentDialogResult",
     "InventoryItemDialog",
     "InventoryItemDialogResult",
+    "InventoryMovementDialog",
     "InventoryTableModel",
     "InventoryTab",
     "InventoryView",
